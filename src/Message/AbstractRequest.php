@@ -2,31 +2,53 @@
 
 namespace Omnipay\Flo2cash\Message;
 
-use DOMDocument;
-use Guzzle\Http\ClientInterface;
-use Symfony\Component\HttpFoundation\Request as HttpRequest;
 use SimpleXMLElement;
-
-use Omnipay\Flo2cash;
+use Omnipay\Common\Message\AbstractRequest as OmniPayAbstractRequest;
+use DOMDocument;
 
 /**
  * Flo2cash Abstract Request
  */
-abstract class AbstractRequest extends \Omnipay\Common\Message\AbstractRequest
+abstract class AbstractRequest extends OmniPayAbstractRequest
 {
-    protected $namespace = "http://www.flo2cash.co.nz/webservices/paymentwebservice";
+    /**
+     * Live Endpoint URL
+     *
+     * @var string URL
+     */
+    protected $liveEndpoint = 'https://secure.flo2cash.co.nz/ws/paymentws.asmx';
 
-    const LIVE_ENDPOINT = 'https://secure.flo2cash.co.nz/ws/paymentws.asmx';
-    const TEST_ENDPOINT = 'https://sandbox.flo2cash.com/ws/paymentws.asmx';
+    /**
+     * Test Endpoint URL
+     *
+     * @var string URL
+     */
+    protected $testEndpoint = 'https://sandbox.flo2cash.com/ws/paymentws.asmx';
+
+    /**
+     * Endpoint namespace
+     *
+     * @var string URL
+     */
+    protected $endpointNamespace = 'http://www.flo2cash.co.nz/webservices/paymentwebservice';
+    
 
     const VERSION = '2.1.1';
 
+    /**
+    * Get the transaction data
+    *
+    * @return SimpleXMLElement
+    */
+    // public function getData()
+    // {
+    // }
 
     public function sendData($data)
     {
         $transactionType = $data['Transaction'];
         $request = $data['Data'];
-
+    
         $document = new DOMDocument('1.0', 'UTF-8');
         $envelope = $document->appendChild(
             $document->createElementNS(
@@ -49,28 +71,29 @@ abstract class AbstractRequest extends \Omnipay\Common\Message\AbstractRequest
             "Cache-Control" => "no-cache",
             "Pragma" => "no-cache",
             "SOAPAction" => $this->getNamespace() . '/' . $transactionType ,
-            "Content-length" => strlen($xml));
-
-        # Catch naughty 500 errors thrown by the gateway
-        $this->httpClient->getEventDispatcher()->addListener(
-            'request.error',
-            function ($event) {
-                if ($event['response']->isServerError()) {
-                    $event->stopPropagation();
-                }
-            }
+            "Content-length" => strlen($xml)
         );
 
-        $httpRequest = $this->httpClient->post(
+        $httpResponse = $this->httpClient->request(
+            'POST',
             $this->getEndpoint(),
             $headers,
             $xml
         );
 
-        $httpResponse = $httpRequest->send();
-        
-        return $this->response = new Response($this, $httpResponse->getBody());
+        return $this->createResponse($httpResponse->getBody()->getContents());
+    }
 
+    /**
+     * Create an authorize response
+     *
+     * @param  SimpleXMLElement $data
+     * @return Omnipay\PaymentExpress\Message\PxPayAuthorizeResponse
+     */
+    protected function createResponse($data)
+    {
+
+        return $this->response = new Response($this, $data);
     }
 
     /**
@@ -93,7 +116,6 @@ abstract class AbstractRequest extends \Omnipay\Common\Message\AbstractRequest
         return $this->getParameter('AccountId');
     }
 
-
     /**
      * Set the Particular.
      *
@@ -113,7 +135,6 @@ abstract class AbstractRequest extends \Omnipay\Common\Message\AbstractRequest
     {
         return $this->getParameter('Particular');
     }
-
 
     /**
      * Set the Email.
@@ -212,6 +233,7 @@ abstract class AbstractRequest extends \Omnipay\Common\Message\AbstractRequest
     {
         return $this->getParameter('merchantReferenceCode');
     }
+
     /**
      * The reference number that we set on the Klinche side.
      *
@@ -231,9 +253,10 @@ abstract class AbstractRequest extends \Omnipay\Common\Message\AbstractRequest
     {
         return $this->getParameter('cardReference');
     }
-     /*
-     * @param string $transactionKey
-     */
+
+    /*
+    * @param string $transactionKey
+    */
     public function setTransactionId($transactionId)
     {
         $this->setParameter('transactionId', $transactionId);
@@ -269,10 +292,11 @@ abstract class AbstractRequest extends \Omnipay\Common\Message\AbstractRequest
 
     public function getNamespace()
     {
-        return "http://www.flo2cash.co.nz/webservices/paymentwebservice";
+        return $this->endpointNamespace;
     }
+    
     public function getEndpoint()
     {
-        return $this->getTestMode() ? self::TEST_ENDPOINT : self::LIVE_ENDPOINT;
+        return $this->getTestMode() === true ? $this->testEndpoint : $this->liveEndpoint;
     }
 }
